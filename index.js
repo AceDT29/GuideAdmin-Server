@@ -12,9 +12,9 @@ const PORT = process.env.PORT || 5000;
 // Lista de orígenes permitidos (desarrollo + producción)
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
-  'http://localhost:4173', // vite preview
-  process.env.FRONTEND_URL,
-].filter(Boolean); // elimina undefined si la env var no está definida
+  'http://localhost:4173',
+  (process.env.FRONTEND_URL || '').trim(),
+].filter(Boolean);
 
 // Middlewares
 app.use(cors({

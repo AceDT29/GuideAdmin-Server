@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const defaultCredPath = path.join(__dirname, '..', '..', 'secreto', 'SSModernityConfig.json');
+const defaultCredPath = path.join(__dirname, '..', '..', 'secreto', 'guide-admin-config.json');
 const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH || defaultCredPath;
 
 let serviceAccount = null;
