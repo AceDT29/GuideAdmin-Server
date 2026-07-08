@@ -1,0 +1,31 @@
+name: Node.js CI (Jest Tests)
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Clonar el repositorio
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Configurar Node.js versión 20 y activar la caché de npm
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    # Instalar dependencias limpiamente
+    - name: Install dependencies
+      run: npm ci
+
+    # Ejecutar las pruebas con Jest
+    - name: Run Jest tests
+      run: npm test
