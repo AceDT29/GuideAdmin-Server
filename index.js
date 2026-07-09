@@ -32,7 +32,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cookieParser());
 
 // Rutas básicas
-app.get('/api/health', (req, res) => {
+app.get('/', (req, res) => {
   res.json({
     status: 'ok',
     message: 'Trade-Web Server is running',
