@@ -13,15 +13,17 @@ const PORT = process.env.PORT || 5000;
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:4173',
+  'https://tradeexpressguides.netlify.app', // Agrégalo explícitamente mientras debugueas
   (process.env.FRONTEND_URL || '').trim(),
-].filter(Boolean);
+].filter(origin => origin.length > 0); // filter Boolean no elimina strings vacíos
 
-// Middlewares
+console.log('[CORS] Orígenes permitidos:', ALLOWED_ORIGINS); // Para debuguear
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Permitir peticiones sin origin (ej: Postman, curl, same-origin)
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    console.error(`[CORS] Origen rechazado: ${origin}`); // Log para debuguear
     callback(new Error(`CORS: origen no permitido → ${origin}`));
   },
   credentials: true,
