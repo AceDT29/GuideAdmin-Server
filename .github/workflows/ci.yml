@@ -29,3 +29,5 @@ jobs:
     # Ejecutar las pruebas con Jest
     - name: Run Jest tests
       run: npm test
+      env:
+        NODE_ENV: test
