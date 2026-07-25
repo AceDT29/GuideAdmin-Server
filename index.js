@@ -4,8 +4,8 @@ import 'dotenv/config';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { createServer } from 'node:http';
-import { Server } from 'socket.io';
 import { fileURLToPath } from 'node:url';
+import { initSocketServer } from './src/sockets/socketHandler.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -17,11 +17,8 @@ export function createApp() {
   const app = express();
   const chatServer = createServer(app);
 
-  const io = new Server(chatServer, {
-    cors: {
-      origin: "*"
-    }
-  });
+  // Inicializar Socket.IO modularizado
+  const io = initSocketServer(chatServer);
 
   // Lista de orígenes permitidos (desarrollo + producción)
   const ALLOWED_ORIGINS = [
@@ -47,34 +44,16 @@ export function createApp() {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use(cookieParser());
 
-  // Chat connection
-  io.on("connection", (socket) => {
-    console.log("Usuario conectado:", socket.id);
-    // join a room
-    socket.on("join", (room) => {
-      socket.join(room);
-      console.log(`Usuario ${socket.id} se unió a la sala ${room}`);
-    });
-    socket.on("disconnect", () => {
-      console.log("Usuario desconectado:", socket.id);
-    });
-    socket.on("createGuide", (guide, callback) => {
-      try {
-        console.log("Nueva guía recibida:", guide);
-        callback({
-          success: true,
-          offset: guide.timestamp,
-        });
-      } catch (error) {
-        console.error("Error al crear la guía:", error);
-        callback({ error: error.message });
-      }
-      io.emit("chatGuide", guide);
-    });
+
+  // Test endpoints
+  app.get('/api/test', (req, res) => {
+    console.log("Test cors pasado con exito")
+    res.status(200).json({ message: 'Prueba para futuros endpoints' });
 
   });
 
   return { app, chatServer, io };
+
 }
 
 // Solo iniciar el servidor cuando se ejecuta directamente (no al importar desde tests)
