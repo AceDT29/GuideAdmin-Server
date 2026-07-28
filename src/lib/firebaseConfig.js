@@ -22,19 +22,14 @@ let firebaseInitialized = false;
 try {
     if (serviceAccountEnv) {
         try {
-            // intentamos parsear como JSON directo
             serviceAccount = JSON.parse(serviceAccountEnv);
-            console.log('Service account loaded from SERVICE_ACCOUNT env (JSON).');
         } catch (e) {
-            // si falla, intentamos base64 -> JSON
             const decoded = Buffer.from(serviceAccountEnv, 'base64').toString('utf8');
             serviceAccount = JSON.parse(decoded);
-            console.log('Service account loaded from SERVICE_ACCOUNT env (base64).');
         }
     } else if (fs.existsSync(serviceAccountPath)) {
         const raw = fs.readFileSync(serviceAccountPath, 'utf8');
         serviceAccount = JSON.parse(raw);
-        console.log('Service account loaded from file:', serviceAccountPath);
     } else {
         throw new Error(`Credentials file not found at: ${serviceAccountPath}`);
     }
