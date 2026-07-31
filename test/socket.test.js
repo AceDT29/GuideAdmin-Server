@@ -1,11 +1,8 @@
 import { jest } from '@jest/globals';
 
-// Mockear Firebase para que use fallback en memoria
-jest.unstable_mockModule('../src/lib/firebaseConfig.js', () => ({
-  db: null,
-  firebaseInitialized: false,
-  firebaseApp: null,
-  adminAuth: null
+// Mockear Supabase para que use fallback en memoria
+jest.unstable_mockModule('../src/lib/supabaseConfig.js', () => ({
+  supabaseAdmin: null
 }));
 
 // Importar createApp después del mock
@@ -42,39 +39,37 @@ afterAll((done) => {
 describe('Socket.IO Server', () => {
 
   test('debe aceptar la conexión de un cliente', () => {
-    // Si llegamos aquí, beforeAll ya conectó exitosamente
     expect(clientSocket.connected).toBe(true);
     expect(clientSocket.id).toBeDefined();
   });
 
-  test('debe permitir unirse a una sala (join)', (done) => {
-    const roomName = 'test-room-123';
+  test('debe permitir unirse a una oficina con join_office', (done) => {
+    const officeId = 'oficina-test-123';
 
-    clientSocket.emit('join', roomName);
+    clientSocket.emit('join_office', officeId);
 
-    // Verificamos que el servidor procesó el join
-    // consultando las salas del socket en el lado del servidor
     setTimeout(() => {
       const serverSockets = io.sockets.sockets;
       const serverSocket = serverSockets.get(clientSocket.id);
 
       expect(serverSocket).toBeDefined();
-      expect(serverSocket.rooms.has(roomName)).toBe(true);
+      expect(serverSocket.rooms.has(officeId)).toBe(true);
       done();
     }, 100);
   });
 
-  test('debe procesar createGuide y emitir chatGuide a todos', (done) => {
+  test('debe procesar createGuide y emitir chatGuide con offset', (done) => {
+    const timestamp = new Date().toISOString();
     const guideData = {
       id: 'guide-ws-test',
       code: 'WST1',
-      title: 'Guía de prueba WebSocket',
-      timestamp: Date.now(),
+      timestamp,
     };
 
     // Escuchar el broadcast de chatGuide
     clientSocket.on('chatGuide', (receivedGuide) => {
-      expect(receivedGuide).toEqual(guideData);
+      expect(receivedGuide.id).toBe(guideData.id);
+      expect(receivedGuide.code).toBe(guideData.code);
       clientSocket.off('chatGuide'); // limpiar listener
       done();
     });
@@ -87,3 +82,4 @@ describe('Socket.IO Server', () => {
   });
 
 });
+

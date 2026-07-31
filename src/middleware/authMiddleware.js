@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../lib/supabaseConfig.js';
 
 export default async function authMiddleware(req, res, next) {
     try {
-        if (!process.env.JWT_SECRET) return res.status(500).json({ ok: false, message: 'MISSING_JWT_SECRET' });
+        if (!process.env.JWT_SECRET) return res.status(500).json({ ok: false, message: 'MISSING_JWT_SECRET_IN_ENVS' });
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ ok: false, message: 'MISSING_TOKEN_IN_HEADERS' });

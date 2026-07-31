@@ -4,9 +4,9 @@ import jwt from 'jsonwebtoken';
 const galleta_secret = process.env.JWT_SECRET || process.env.SECRET_KEY;
 
 async function registerUser(req, res) {
-    const { email, password } = req.body;
+    const { email, password, displayName } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || !displayName) {
         return res.status(400).json({ ok: false, message: 'MISSING_EMAIL_OR_PASSWORD' });
     }
 
@@ -15,8 +15,10 @@ async function registerUser(req, res) {
             email,
             password,
             email_confirm: true,
+            user_metadata: {
+                display_name: displayName,
+            },
         });
-
         if (error) {
             if (error.message.includes('already been registered')) {
                 return res.status(409).json({ ok: false, message: 'USER_ALREADY_EXISTS' });
@@ -26,7 +28,11 @@ async function registerUser(req, res) {
         }
 
         const token = jwt.sign(
-            { uid: data.user.id, email: data.user.email },
+            {
+                uid: data.user.id,
+                email: data.user.email,
+                displayName: data.user.user_metadata?.display_name || null,
+            },
             galleta_secret,
             { expiresIn: '7d' }
         );
@@ -47,4 +53,34 @@ async function returnUser(req, res) {
     }
 }
 
-export { registerUser, returnUser };
+async function loginUser(req, res) {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ ok: false, message: 'MISSING_EMAIL_OR_PASSWORD' });
+    }
+
+    try {
+        const { data, error } = await supabaseAdmin.auth.admin.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            console.error('Error while signing in:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
+
+        const token = jwt.sign(
+            { uid: data.user.id, email: data.user.email, displayName: data.user.display_name },
+            galleta_secret,
+            { expiresIn: '7d' }
+        );
+        return res.status(200).json({ ok: true, message: 'User logged in successfully', token });
+    } catch (err) {
+        console.error('Unexpected error during user login:', err);
+        return res.status(500).json({ ok: false, error: err.message });
+    }
+}
+
+export { registerUser, returnUser, loginUser };
