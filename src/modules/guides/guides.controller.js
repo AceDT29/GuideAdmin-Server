@@ -6,10 +6,10 @@ import { GuidesModel } from './guides.model.js';
  */
 export async function getGuides(req, res, next) {
   try {
-    const officeId = req.query.office_id || req.user?.office_id || 'default';
+    const officeId = req.query.office_id || req.user?.office_id || req.user?.id || 'default';
     const since = req.query.since || null;
     
-    const guides = req.query.office_id || req.query.since
+    const guides = (req.query.office_id || req.user?.office_id || req.query.since)
       ? await GuidesModel.getByOffice(officeId, since)
       : await GuidesModel.getAll();
 
@@ -34,7 +34,7 @@ export async function createOrUpdateGuide(req, res, next) {
       });
     }
 
-    const officeId = guide.office_id || req.user?.office_id || 'default';
+    const officeId = guide.office_id || req.user?.office_id || req.user?.id || 'default';
     const userId = req.user?.id || null;
 
     const savedGuide = await GuidesModel.save(guide, officeId, userId);

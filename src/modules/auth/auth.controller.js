@@ -32,11 +32,18 @@ async function registerUser(req, res) {
                 uid: data.user.id,
                 email: data.user.email,
                 displayName: data.user.user_metadata?.display_name || null,
+                officeId: data.user.user_metadata?.office_id || data.user.id,
             },
             galleta_secret,
             { expiresIn: '7d' }
         );
-        return res.status(201).json({ ok: true, message: 'User registered successfully', token });
+        return res.status(201).json({ 
+            ok: true, 
+            message: 'User registered successfully', 
+            token,
+            uid:      data.user.id,
+            officeId: data.user.user_metadata?.office_id || data.user.id,
+        });
     } catch (err) {
         console.error('Unexpected error during user creation:', err);
         return res.status(500).json({ ok: false, error: err.message });
@@ -46,7 +53,14 @@ async function registerUser(req, res) {
 async function returnUser(req, res) {
     try {
         if (!req.user) return res.status(404).json({ ok: false, message: 'USER_NOT_FOUND' });
-        return res.status(200).json({ ok: true, user: { uid: req.user.id, email: req.user.email } });
+        return res.status(200).json({
+            ok: true,
+            user: {
+                uid: req.user.id,
+                email: req.user.email,
+                officeId: req.user.office_id || req.user.user_metadata?.office_id || req.user.id
+            }
+        });
     } catch (err) {
         console.error('Error returning user:', err);
         return res.status(500).json({ ok: false, message: 'INTERNAL_SERVER_ERROR' });
@@ -61,7 +75,7 @@ async function loginUser(req, res) {
     }
 
     try {
-        const { data, error } = await supabaseAdmin.auth.admin.signInWithPassword({
+        const { data, error } = await supabaseAdmin.auth.signInWithPassword({
             email,
             password,
         });
@@ -72,11 +86,22 @@ async function loginUser(req, res) {
         }
 
         const token = jwt.sign(
-            { uid: data.user.id, email: data.user.email, displayName: data.user.display_name },
+            {
+                uid: data.user.id,
+                email: data.user.email,
+                displayName: data.user.user_metadata?.display_name || null,
+                officeId: data.user.user_metadata?.office_id || data.user.id,
+            },
             galleta_secret,
             { expiresIn: '7d' }
         );
-        return res.status(200).json({ ok: true, message: 'User logged in successfully', token });
+        return res.status(200).json({ 
+            ok: true, 
+            message: 'User logged in successfully', 
+            token,
+            uid:      data.user.id,
+            officeId: data.user.user_metadata?.office_id || data.user.id,
+        });
     } catch (err) {
         console.error('Unexpected error during user login:', err);
         return res.status(500).json({ ok: false, error: err.message });

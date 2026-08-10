@@ -21,6 +21,7 @@ export function createApp() {
 
   // Inicializar Socket.IO modularizado
   const io = initSocketServer(chatServer);
+  app.set('io', io);
 
   // Lista de orígenes permitidos (desarrollo + producción)
   const ALLOWED_ORIGINS = [
