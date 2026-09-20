@@ -1,16 +1,30 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { GuidesModel } from '../modules/guides/guides.model.js';
+import { fetchGuidesByOffice } from '../modules/guides/guides.service.js';
 
 /**
  * Registra los eventos de conexión y lógica de Socket.IO.
  * @param {import('socket.io').Server} io
  */
 export function registerSocketEvents(io) {
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     // Unir automáticamente a la sala de la oficina autenticada
     if (socket.officeId) {
       socket.join(socket.officeId);
+
+      try {
+        const guides = await fetchGuidesByOffice(socket.officeId);
+        console.log(`[Socket] Guías cargadas para oficina ${socket.officeId}:`, guides.length);
+
+        if (guides.length > 0) {
+          // Emitir solo al socket que se acaba de conectar, no a toda la sala
+          socket.emit("initialGuides", guides);
+        }
+      } catch (error) {
+        console.error(`[Socket] Error al cargar guías para oficina ${socket.officeId}:`, error);
+      }
+
       console.log(`[Socket] Usuario ${socket.user?.uid || socket.id} (${socket.user?.email || 'N/A'}) se unió automáticamente a la sala de oficina: ${socket.officeId}`);
     } else {
       console.log(`[Socket] Conexión establecida sin officeId para socket: ${socket.id}`);
@@ -23,7 +37,7 @@ export function registerSocketEvents(io) {
       console.log(`[Socket] Usuario ${socket.id} se unió manualmente a la sala ${room}`);
     });
 
-    socket.on("join_office", (officeId) => {
+    socket.on("join_office", async (officeId) => {
       socket.join(officeId);
       socket.officeId = officeId;
       console.log(`[Socket] Usuario ${socket.id} se unió manualmente a la oficina ${officeId}`);
@@ -126,4 +140,3 @@ export function initSocketServer(httpServer) {
 
   return io;
 }
-

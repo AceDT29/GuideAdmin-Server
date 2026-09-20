@@ -1,4 +1,5 @@
 import { GuidesModel } from './guides.model.js';
+import { fetchGuidesByOffice } from './guides.service.js';
 
 /**
  * Obtiene las guías almacenadas, opcionalmente filtradas por oficina y offset (since).
@@ -9,9 +10,7 @@ export async function getGuides(req, res, next) {
     const officeId = req.query.office_id || req.user?.office_id || req.user?.id || 'default';
     const since = req.query.since || null;
     
-    const guides = (req.query.office_id || req.user?.office_id || req.query.since)
-      ? await GuidesModel.getByOffice(officeId, since)
-      : await GuidesModel.getAll();
+    const guides = await fetchGuidesByOffice(officeId, since);
 
     res.json({ guides });
   } catch (error) {
@@ -54,4 +53,3 @@ export async function createOrUpdateGuide(req, res, next) {
     next(error);
   }
 }
-
