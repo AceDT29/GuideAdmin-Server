@@ -15,11 +15,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Configurar Node.js versión 20 y activar la caché de npm
+    # Configurar Node.js versión 22 y activar la caché de npm
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'npm'
 
     # Instalar dependencias limpiamente
