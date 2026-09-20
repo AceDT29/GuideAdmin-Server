@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { initSocketServer } from './src/sockets/socketHandler.js';
 import authRoutes from './src/modules/auth/auth.routes.js';
 import guidesRoutes from './src/routes/guides.routes.js';
+import { initCronJobs } from './src/services/cronService.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -55,7 +56,11 @@ const isMainModule = process.argv[1]
   && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isMainModule) {
-  const { chatServer } = createApp();
+  const { chatServer, io } = createApp();
+
+  // Inicializar cron jobs (limpieza/purga automática de guías)
+  initCronJobs(io);
+
   chatServer.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

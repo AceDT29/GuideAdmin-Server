@@ -50,5 +50,31 @@ describe('GuidesModel (Memory Fallback)', () => {
     expect(found).toBeDefined();
     expect(found.code).toBe('UP1-UPDATED');
   });
+
+  test('debe purgar todas las guías con purgeAll', async () => {
+    await GuidesModel.save({ id: 'purge-1', code: 'P1' }, 'oficina-1');
+    await GuidesModel.save({ id: 'purge-2', code: 'P2' }, 'oficina-2');
+
+    const result = await GuidesModel.purgeAll();
+    expect(result.deletedCount).toBeGreaterThanOrEqual(2);
+
+    const all = await GuidesModel.getAll();
+    expect(all).toHaveLength(0);
+  });
+
+  test('debe eliminar guías con más de X horas de antigüedad con deleteOlderThan', async () => {
+    const oldTimestamp = new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(); // 20 horas atrás
+    const recentTimestamp = new Date().toISOString();
+
+    await GuidesModel.save({ id: 'old-guide', code: 'OLD', timestamp: oldTimestamp }, 'oficina-1');
+    await GuidesModel.save({ id: 'recent-guide', code: 'REC', timestamp: recentTimestamp }, 'oficina-1');
+
+    const result = await GuidesModel.deleteOlderThan(16);
+    expect(result.deletedCount).toBe(1);
+
+    const remaining = await GuidesModel.getAll();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe('recent-guide');
+  });
 });
 
