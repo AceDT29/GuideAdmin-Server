@@ -90,5 +90,62 @@ export class GuidesModel {
     }
     return record;
   }
+
+  /**
+   * Elimina todos los registros de guías (purga total).
+   * @returns {Promise<{ deletedCount: number }>}
+   */
+  static async purgeAll() {
+    if (supabaseAdmin) {
+      // Supabase / PostgREST requiere una condición de filtro para DELETE masivo
+      const { error, count } = await supabaseAdmin
+        .from('guides')
+        .delete({ count: 'exact' })
+        .not('id', 'is', null);
+
+      if (error) {
+        console.error('[GuidesModel] Error al purgar la tabla de guías en Supabase:', error);
+        throw error;
+      }
+      return { deletedCount: count || 0 };
+    }
+
+    console.log('[GuidesModel] Purgando guías del fallback en memoria');
+    const deletedCount = guidesStore.length;
+    guidesStore.length = 0;
+    return { deletedCount };
+  }
+
+  /**
+   * Elimina guías con más de X horas de antigüedad.
+   * @param {number} hours Horas de antigüedad.
+   * @returns {Promise<{ deletedCount: number }>}
+   */
+  static async deleteOlderThan(hours = 16) {
+    const cutoffDate = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    if (supabaseAdmin) {
+      const { error, count } = await supabaseAdmin
+        .from('guides')
+        .delete({ count: 'exact' })
+        .lt('timestamp', cutoffDate);
+
+      if (error) {
+        console.error('[GuidesModel] Error al eliminar guías antiguas en Supabase:', error);
+        throw error;
+      }
+      return { deletedCount: count || 0 };
+    }
+
+    console.log('[GuidesModel] Limpiando guías antiguas del fallback en memoria');
+    const initialCount = guidesStore.length;
+    for (let i = guidesStore.length - 1; i >= 0; i--) {
+      if (guidesStore[i].timestamp < cutoffDate) {
+        guidesStore.splice(i, 1);
+      }
+    }
+    const deletedCount = initialCount - guidesStore.length;
+    return { deletedCount };
+  }
 }
 
