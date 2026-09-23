@@ -2,8 +2,18 @@ import { supabaseAdmin } from "../../lib/supabaseConfig.js";
 import jwt from 'jsonwebtoken';
 import { SessionService } from '../../services/session.service.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SECRET_KEY;
 const ACCESS_TOKEN_EXPIRY = '15m';
+
+/**
+ * Obtiene la clave secreta JWT configurada en variables de entorno.
+ */
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET || process.env.SECRET_KEY;
+  if (!secret) {
+    throw new Error('MISSING_JWT_SECRET_IN_ENVS');
+  }
+  return secret;
+}
 
 /**
  * Extrae la IP del cliente del request.
@@ -23,10 +33,8 @@ function getDeviceInfo(req, explicitDevice = '') {
  * Helper para generar Access Token JWT de corta duración (15 min).
  */
 function createAccessToken(payload) {
-  if (!JWT_SECRET) {
-    throw new Error('MISSING_JWT_SECRET_IN_ENVS');
-  }
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  const secret = getJwtSecret();
+  return jwt.sign(payload, secret, { expiresIn: ACCESS_TOKEN_EXPIRY });
 }
 
 /**

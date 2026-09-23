@@ -1,6 +1,16 @@
+import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
-import { createApp } from '../index.js';
-import { SessionService } from '../src/services/session.service.js';
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-1234567890';
+
+// Mockear la configuración de Supabase para asegurar que los tests 
+// usen siempre el fallback de memoria y no dependan de credenciales reales ni fallen en CI.
+jest.unstable_mockModule('../src/lib/supabaseConfig.js', () => ({
+  supabaseAdmin: null,
+}));
+
+const { createApp } = await import('../index.js');
+const { SessionService } = await import('../src/services/session.service.js');
 
 describe('Auth & Multi-Device Session System Tests', () => {
   let app;
@@ -8,7 +18,6 @@ describe('Auth & Multi-Device Session System Tests', () => {
   let baseUrl;
 
   beforeAll(async () => {
-    process.env.JWT_SECRET = 'test-jwt-secret-key-1234567890';
     const setup = createApp();
     app = setup.app;
     server = setup.chatServer;
