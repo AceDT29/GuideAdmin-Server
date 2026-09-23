@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { GuidesModel } from '../modules/guides/guides.model.js';
+import { SessionService } from './session.service.js';
 
 /**
  * Inicializa las tareas programadas (cron jobs) de la aplicación.
@@ -9,10 +10,15 @@ import { GuidesModel } from '../modules/guides/guides.model.js';
  */
 export function initCronJobs(io = null, scheduleExpression = process.env.CRON_GUIDES_PURGE || '0 */16 * * *') {
   const task = cron.schedule(scheduleExpression, async () => {
-    console.log(`[Cron] Iniciando purga automática de guías (${new Date().toISOString()})...`);
+    console.log(`[Cron] Iniciando mantenimiento periódico (${new Date().toISOString()})...`);
     try {
+      // 1. Purga automática de guías
       const result = await GuidesModel.purgeAll();
-      console.log(`[Cron] Purga completada exitosamente. Registros eliminados: ${result.deletedCount}`);
+      console.log(`[Cron] Purga de guías completada. Registros eliminados: ${result.deletedCount}`);
+
+      // 2. Limpieza de sesiones de usuario expiradas
+      const sessionResult = await SessionService.cleanupExpiredSessions();
+      console.log(`[Cron] Limpieza de sesiones completada. Sesiones expiradas eliminadas: ${sessionResult.deletedCount}`);
 
       // Notificar a todos los clientes conectados a través de Socket.IO
       if (io) {
@@ -23,7 +29,7 @@ export function initCronJobs(io = null, scheduleExpression = process.env.CRON_GU
         console.log('[Cron] Evento "guidesCleared" emitido a los clientes conectados.');
       }
     } catch (error) {
-      console.error('[Cron] Error durante la purga de guías:', error);
+      console.error('[Cron] Error durante el mantenimiento programado:', error);
     }
   });
 
