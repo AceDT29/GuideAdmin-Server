@@ -27,6 +27,7 @@ export function createApp() {
   // Lista de orígenes permitidos (desarrollo + producción)
   const ALLOWED_ORIGINS = [
     'http://localhost:5173',
+    'https://tradeexpressguides.netlify.app',
     (process.env.FRONTEND_URL || '').trim(),
   ].filter(origin => origin.length > 0); // filter Boolean no elimina strings vacíos
 
