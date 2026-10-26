@@ -50,7 +50,7 @@ export function registerSocketEvents(io) {
     socket.on("createGuide", async (guide, callback) => {
       try {
         console.log("Nueva guía recibida:", guide);
-        const officeId = socket.officeId || guide.office_id || "default";
+        const officeId = socket.officeId || guide.office_id || guide.officeId || "default";
         const userId = socket.user?.uid || socket.user?.id || null;
 
         const savedGuide = await GuidesModel.save(guide, officeId, userId);
@@ -74,6 +74,69 @@ export function registerSocketEvents(io) {
         }
       }
     });
+
+    // Manejador del evento updateGuide (checkbox entregado o edición de dueño)
+    socket.on("updateGuide", async ({ id, ...updates }, callback) => {
+      try {
+        console.log(`[Socket] Actualizando guía ${id}:`, updates);
+        const updated = await GuidesModel.update(id, updates);
+
+        if (typeof callback === 'function') {
+          callback({ success: true, guide: updated });
+        }
+
+        const officeId = socket.officeId || updated?.office_id;
+        if (officeId) {
+          io.to(officeId).emit("updateGuide", updated);
+        } else {
+          io.emit("updateGuide", updated);
+        }
+      } catch (error) {
+        console.error(`[Socket] Error actualizando guía ${id}:`, error);
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
+      }
+    });
+
+    // Manejador del evento para reiniciar la gestión de guías
+    const handleResetGuides = async (data, callback) => {
+      try {
+        const cb = typeof data === 'function' ? data : callback;
+        const requestedOffice = (data && typeof data === 'object') ? (data.officeId || data.office_id) : null;
+        const officeId = requestedOffice || socket.officeId || "default";
+
+        console.log(`[Socket] Solicitud de reinicio de gestión de guías para oficina: ${officeId}`);
+        const result = await GuidesModel.clearByOffice(officeId);
+
+        const payload = {
+          officeId,
+          purgedAt: new Date().toISOString(),
+          deletedCount: result.deletedCount
+        };
+
+        if (typeof cb === 'function') {
+          cb({ success: true, ...payload });
+        }
+
+        if (officeId && officeId !== 'all') {
+          io.to(officeId).emit("guidesCleared", payload);
+          io.to(officeId).emit("guidesReset", payload);
+        } else {
+          io.emit("guidesCleared", payload);
+          io.emit("guidesReset", payload);
+        }
+      } catch (error) {
+        console.error("[Socket] Error al reiniciar guías:", error);
+        const cb = typeof data === 'function' ? data : callback;
+        if (typeof cb === 'function') {
+          cb({ error: error.message });
+        }
+      }
+    };
+
+    socket.on("resetGuides", handleResetGuides);
+    socket.on("clearGuides", handleResetGuides);
   });
 }
 
