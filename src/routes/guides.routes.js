@@ -1,5 +1,10 @@
 import express from 'express';
-import { getGuides, createOrUpdateGuide } from '../modules/guides/guides.controller.js';
+import { 
+  getGuides, 
+  createOrUpdateGuide, 
+  updateGuide, 
+  resetGuides 
+} from '../modules/guides/guides.controller.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -9,5 +14,12 @@ router.get('/', authMiddleware, getGuides);
 
 // POST /api/guides
 router.post('/', authMiddleware, createOrUpdateGuide);
+
+// PATCH /api/guides/:id (marcar entregado o actualizar detalles)
+router.patch('/:id', authMiddleware, updateGuide);
+
+// POST /api/guides/reset o DELETE /api/guides (reiniciar gestión de guías)
+router.post('/reset', authMiddleware, resetGuides);
+router.delete('/', authMiddleware, resetGuides);
 
 export default router;

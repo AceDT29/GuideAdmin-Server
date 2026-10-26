@@ -114,6 +114,56 @@ describe('Socket.IO Server (con Autenticación JWT y Auto-Join de Oficina)', () 
     });
   });
 
+  test('debe procesar updateGuide y emitir el evento a la sala de la oficina', (done) => {
+    clientSocket.on('updateGuide', (updatedGuide) => {
+      expect(updatedGuide.id).toBe('guide-ws-test');
+      expect(updatedGuide.delivered).toBe(true);
+      expect(updatedGuide.owner).toBe('CARLOS RUIZ');
+      clientSocket.off('updateGuide');
+      done();
+    });
+
+    clientSocket.emit('updateGuide', {
+      id: 'guide-ws-test',
+      delivered: true,
+      owner: 'CARLOS RUIZ'
+    }, (response) => {
+      expect(response.success).toBe(true);
+      expect(response.guide.delivered).toBe(true);
+    });
+  });
+
+  test('debe procesar resetGuides y emitir guidesCleared y guidesReset a la sala de la oficina', (done) => {
+    let clearedReceived = false;
+    let resetReceived = false;
+
+    const checkDone = () => {
+      if (clearedReceived && resetReceived) {
+        clientSocket.off('guidesCleared');
+        clientSocket.off('guidesReset');
+        done();
+      }
+    };
+
+    clientSocket.on('guidesCleared', (payload) => {
+      expect(payload.officeId).toBe(testOfficeId);
+      expect(payload.deletedCount).toBeGreaterThanOrEqual(1);
+      clearedReceived = true;
+      checkDone();
+    });
+
+    clientSocket.on('guidesReset', (payload) => {
+      expect(payload.officeId).toBe(testOfficeId);
+      resetReceived = true;
+      checkDone();
+    });
+
+    clientSocket.emit('resetGuides', {}, (response) => {
+      expect(response.success).toBe(true);
+      expect(response.officeId).toBe(testOfficeId);
+    });
+  });
+
 });
 
 
