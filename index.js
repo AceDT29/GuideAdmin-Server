@@ -12,6 +12,13 @@ import { initCronJobs } from './src/services/cronService.js';
 
 const PORT = process.env.PORT || 5000;
 
+// Lista centralizada de orígenes permitidos (desarrollo + producción)
+export const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'https://tradeexpressguides.netlify.app',
+  (process.env.FRONTEND_URL || '').trim(),
+].filter(origin => origin.length > 0);
+
 /**
  * Crea y configura la aplicación Express + Socket.IO.
  * @returns {{ app: import('express').Express, chatServer: import('http').Server, io: import('socket.io').Server }}
@@ -20,16 +27,9 @@ export function createApp() {
   const app = express();
   const chatServer = createServer(app);
 
-  // Inicializar Socket.IO modularizado
-  const io = initSocketServer(chatServer);
+  // Inicializar Socket.IO modularizado con los orígenes unificados
+  const io = initSocketServer(chatServer, ALLOWED_ORIGINS);
   app.set('io', io);
-
-  // Lista de orígenes permitidos (desarrollo + producción)
-  const ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'https://tradeexpressguides.netlify.app',
-    (process.env.FRONTEND_URL || '').trim(),
-  ].filter(origin => origin.length > 0); // filter Boolean no elimina strings vacíos
 
   app.use(cors({
     origin: (origin, callback) => {
@@ -48,8 +48,32 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/guides', guidesRoutes);
 
-  return { app, chatServer, io };
+  // Manejo de rutas no encontradas (404)
+  app.use((req, res) => {
+    res.status(404).json({
+      ok: false,
+      status: 'error',
+      message: 'ENDPOINT_NOT_FOUND',
+      path: req.originalUrl
+    });
+  });
 
+  // Middleware centralizado de control de errores
+  app.use((err, req, res, next) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const statusCode = err.status || err.statusCode || 500;
+
+    console.error(`[Error Handler] ${req.method} ${req.url} → ${err.message}`);
+
+    res.status(statusCode).json({
+      ok: false,
+      status: 'error',
+      message: err.message || 'INTERNAL_SERVER_ERROR',
+      ...(isProduction ? {} : { stack: err.stack })
+    });
+  });
+
+  return { app, chatServer, io };
 }
 
 // Solo iniciar el servidor cuando se ejecuta directamente (no al importar desde tests)

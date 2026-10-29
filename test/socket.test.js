@@ -9,8 +9,9 @@ jest.unstable_mockModule('../src/lib/supabaseConfig.js', () => ({
   supabaseAdmin: null
 }));
 
-// Importar createApp después del mock
+// Importar createApp y GuidesModel después del mock
 const { createApp } = await import('../index.js');
+const { GuidesModel } = await import('../src/modules/guides/guides.model.js');
 const { io: Client } = await import('socket.io-client');
 
 let chatServer, io;
@@ -130,6 +131,25 @@ describe('Socket.IO Server (con Autenticación JWT y Auto-Join de Oficina)', () 
     }, (response) => {
       expect(response.success).toBe(true);
       expect(response.guide.delivered).toBe(true);
+    });
+  });
+
+  test('debe procesar deleteGuide y emitir guideDeleted a la sala de la oficina', async () => {
+    // Guardar una guía adicional para probar el borrado sin vaciar la oficina
+    await GuidesModel.save({ id: 'guide-ws-delete', code: 'WSDEL1' }, testOfficeId);
+
+    await new Promise((resolve) => {
+      clientSocket.on('guideDeleted', (payload) => {
+        expect(payload.id).toBe('guide-ws-delete');
+        expect(payload.officeId).toBe(testOfficeId);
+        clientSocket.off('guideDeleted');
+        resolve();
+      });
+
+      clientSocket.emit('deleteGuide', { id: 'guide-ws-delete' }, (response) => {
+        expect(response.success).toBe(true);
+        expect(response.id).toBe('guide-ws-delete');
+      });
     });
   });
 

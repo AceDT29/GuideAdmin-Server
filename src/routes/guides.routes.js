@@ -3,7 +3,8 @@ import {
   getGuides, 
   createOrUpdateGuide, 
   updateGuide, 
-  resetGuides 
+  resetGuides,
+  deleteGuide
 } from '../modules/guides/guides.controller.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
@@ -17,6 +18,9 @@ router.post('/', authMiddleware, createOrUpdateGuide);
 
 // PATCH /api/guides/:id (marcar entregado o actualizar detalles)
 router.patch('/:id', authMiddleware, updateGuide);
+
+// DELETE /api/guides/:id (eliminar una guía individual)
+router.delete('/:id', authMiddleware, deleteGuide);
 
 // POST /api/guides/reset o DELETE /api/guides (reiniciar gestión de guías)
 router.post('/reset', authMiddleware, resetGuides);

@@ -50,7 +50,8 @@ export function registerSocketEvents(io) {
     socket.on("createGuide", async (guide, callback) => {
       try {
         console.log("Nueva guía recibida:", guide);
-        const officeId = socket.officeId || guide.office_id || guide.officeId || "default";
+        // La oficina SIEMPRE proviene del socket autenticado
+        const officeId = socket.officeId || "default";
         const userId = socket.user?.uid || socket.user?.id || null;
 
         const savedGuide = await GuidesModel.save(guide, officeId, userId);
@@ -79,13 +80,16 @@ export function registerSocketEvents(io) {
     socket.on("updateGuide", async ({ id, ...updates }, callback) => {
       try {
         console.log(`[Socket] Actualizando guía ${id}:`, updates);
-        const updated = await GuidesModel.update(id, updates);
+        const officeId = socket.officeId || "default";
+        delete updates.office_id;
+        delete updates.officeId;
+
+        const updated = await GuidesModel.update(id, updates, officeId);
 
         if (typeof callback === 'function') {
           callback({ success: true, guide: updated });
         }
 
-        const officeId = socket.officeId || updated?.office_id;
         if (officeId) {
           io.to(officeId).emit("updateGuide", updated);
         } else {
@@ -99,12 +103,39 @@ export function registerSocketEvents(io) {
       }
     });
 
+    // Manejador del evento deleteGuide (eliminación individual de una guía)
+    socket.on("deleteGuide", async ({ id }, callback) => {
+      try {
+        console.log(`[Socket] Eliminando guía ${id}`);
+        const officeId = socket.officeId || "default";
+        const deleted = await GuidesModel.delete(id, officeId);
+
+        if (typeof callback === 'function') {
+          callback({ success: Boolean(deleted), id });
+        }
+
+        if (deleted) {
+          const payload = { id, officeId };
+          if (officeId && officeId !== 'all' && officeId !== 'default') {
+            io.to(officeId).emit("guideDeleted", payload);
+          } else {
+            io.emit("guideDeleted", payload);
+          }
+        }
+      } catch (error) {
+        console.error(`[Socket] Error eliminando guía ${id}:`, error);
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
+      }
+    });
+
     // Manejador del evento para reiniciar la gestión de guías
     const handleResetGuides = async (data, callback) => {
       try {
         const cb = typeof data === 'function' ? data : callback;
-        const requestedOffice = (data && typeof data === 'object') ? (data.officeId || data.office_id) : null;
-        const officeId = requestedOffice || socket.officeId || "default";
+        // La oficina SIEMPRE proviene del socket autenticado
+        const officeId = socket.officeId || "default";
 
         console.log(`[Socket] Solicitud de reinicio de gestión de guías para oficina: ${officeId}`);
         const result = await GuidesModel.clearByOffice(officeId);
@@ -143,12 +174,20 @@ export function registerSocketEvents(io) {
 /**
  * Inicializa y configura el servidor Socket.IO integrándolo al servidor HTTP principal.
  * @param {import('node:http').Server} httpServer
+ * @param {string[]|null} [allowedOrigins]
  * @returns {import('socket.io').Server}
  */
-export function initSocketServer(httpServer) {
+export function initSocketServer(httpServer, allowedOrigins = null) {
+  const origins = allowedOrigins || [
+    'http://localhost:5173',
+    'https://tradeexpressguides.netlify.app',
+    (process.env.FRONTEND_URL || '').trim(),
+  ].filter(origin => origin.length > 0);
+
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:5173"
+      origin: origins,
+      credentials: true
     }
   });
 

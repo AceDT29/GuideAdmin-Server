@@ -124,9 +124,10 @@ export class GuidesModel {
    * Actualización parcial rápida (para marcar entregado, cambiar dueño, etc.).
    * @param {string} id - ID de la guía.
    * @param {Object} updates - Propiedades a actualizar.
+   * @param {string} [officeId] - ID de la oficina para asegurar aislamiento multi-inquilino.
    * @returns {Promise<Object|null>} Guía actualizada en formato camelCase.
    */
-  static async update(id, updates = {}) {
+  static async update(id, updates = {}, officeId = null) {
     const allowed = {};
     if ('owner' in updates) allowed.owner = updates.owner;
     if ('serviceType' in updates) allowed.service_type = updates.serviceType;
@@ -138,10 +139,16 @@ export class GuidesModel {
     allowed.updated_at = new Date().toISOString();
 
     if (supabaseAdmin) {
-      let { data, error } = await supabaseAdmin
+      let queryById = supabaseAdmin
         .from('guides')
         .update(allowed)
-        .eq('id', id)
+        .eq('id', id);
+
+      if (officeId && officeId !== 'all' && officeId !== 'default') {
+        queryById = queryById.eq('office_id', officeId);
+      }
+
+      let { data, error } = await queryById
         .select('id, code, owner, service_type, has_payment, delivered, timestamp, office_id, user_id')
         .maybeSingle();
 
@@ -149,10 +156,16 @@ export class GuidesModel {
 
       // Si no se encontró por ID, intentar buscar por código (trackingNumber)
       if (!data) {
-        const { data: dataByCode, error: errCode } = await supabaseAdmin
+        let queryByCode = supabaseAdmin
           .from('guides')
           .update(allowed)
-          .eq('code', id)
+          .eq('code', id);
+
+        if (officeId && officeId !== 'all' && officeId !== 'default') {
+          queryByCode = queryByCode.eq('office_id', officeId);
+        }
+
+        const { data: dataByCode, error: errCode } = await queryByCode
           .select('id, code, owner, service_type, has_payment, delivered, timestamp, office_id, user_id')
           .maybeSingle();
 
@@ -164,7 +177,12 @@ export class GuidesModel {
     }
 
     console.log('[GuidesModel] Usando fallback en memoria para update');
-    const item = guidesStore.find((g) => g.id === id || g.code === id);
+    const item = guidesStore.find((g) => {
+      const matchId = g.id === id || g.code === id;
+      const matchOffice = !officeId || officeId === 'all' || officeId === 'default' || g.office_id === officeId;
+      return matchId && matchOffice;
+    });
+
     if (item) {
       Object.assign(item, allowed);
       return this._formatToCamelCase(item);
@@ -179,6 +197,51 @@ export class GuidesModel {
    */
   static async markDelivered(trackingNumberOrId) {
     return this.update(trackingNumberOrId, { delivered: true });
+  }
+
+  /**
+   * Elimina una guía individual por su ID o código de seguimiento.
+   * @param {string} id - ID o código de la guía.
+   * @param {string} [officeId] - ID de la oficina.
+   * @returns {Promise<boolean>} True si fue eliminada, false en caso contrario.
+   */
+  static async delete(id, officeId = null) {
+    if (!id) return false;
+
+    if (supabaseAdmin) {
+      let query = supabaseAdmin
+        .from('guides')
+        .delete({ count: 'exact' });
+
+      if (officeId && officeId !== 'all' && officeId !== 'default') {
+        query = query.eq('office_id', officeId);
+      }
+
+      const { data, error, count } = await query
+        .or(`id.eq.${id},code.eq.${id}`)
+        .select('id');
+
+      if (error) {
+        console.error(`[GuidesModel] Error al eliminar guía ${id} en Supabase:`, error);
+        throw error;
+      }
+
+      return (count || (data ? data.length : 0)) > 0;
+    }
+
+    console.log(`[GuidesModel] Eliminando guía ${id} del fallback en memoria`);
+    const index = guidesStore.findIndex((g) => {
+      const matchId = g.id === id || g.code === id;
+      const matchOffice = !officeId || officeId === 'all' || officeId === 'default' || g.office_id === officeId;
+      return matchId && matchOffice;
+    });
+
+    if (index !== -1) {
+      guidesStore.splice(index, 1);
+      return true;
+    }
+
+    return false;
   }
 
 

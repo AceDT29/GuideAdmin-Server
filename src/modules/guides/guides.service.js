@@ -44,13 +44,27 @@ export async function deliverGuide(trackingNumber) {
  * Actualiza parcialmente los datos de una guía (entregado, dueño, cobro, etc.).
  * @param {string} id - ID o código de la guía.
  * @param {Object} updates - Datos a actualizar.
+ * @param {string} [officeId] - ID de la oficina.
  * @returns {Promise<Object|null>} Guía actualizada.
  */
-export async function updateGuide(id, updates = {}) {
+export async function updateGuide(id, updates = {}, officeId = null) {
   if (!id) {
     throw new Error('ID de guía requerido');
   }
-  return GuidesModel.update(id, updates);
+  return GuidesModel.update(id, updates, officeId);
+}
+
+/**
+ * Elimina una guía individual por su ID o código de seguimiento.
+ * @param {string} id - ID o código de la guía.
+ * @param {string} [officeId] - ID de la oficina.
+ * @returns {Promise<boolean>}
+ */
+export async function deleteGuide(id, officeId = null) {
+  if (!id) {
+    throw new Error('ID de guía requerido');
+  }
+  return GuidesModel.delete(id, officeId);
 }
 
 /**

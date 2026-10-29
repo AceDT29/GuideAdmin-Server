@@ -246,8 +246,54 @@ describe('GuidesModel (Memory Fallback)', () => {
       expect(data.owner).toBe('ANA TORRES');
     });
 
-    test('PATCH /api/guides/:id debe devolver 404 si la guía no existe', async () => {
-      const response = await fetch(`${baseUrl}/api/guides/inexistente-999`, {
+    test('DELETE /api/guides/:id debe eliminar una guía existente vía HTTP', async () => {
+      await GuidesModel.save({
+        id: 'http-guide-delete',
+        code: 'DEL-01',
+        owner: 'MARCOS PEÑA'
+      }, 'oficina-http-test');
+
+      const response = await fetch(`${baseUrl}/api/guides/http-guide-delete`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.success).toBe(true);
+      expect(data.id).toBe('http-guide-delete');
+
+      // Verificar que ya no exista
+      const officeGuides = await GuidesModel.getByOffice('oficina-http-test');
+      expect(officeGuides.some(g => g.id === 'http-guide-delete')).toBe(false);
+    });
+
+    test('DELETE /api/guides/:id debe devolver 404 si la guía no existe', async () => {
+      const response = await fetch(`${baseUrl}/api/guides/inexistente-del-999`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      expect(response.status).toBe(404);
+      const data = await response.json();
+      expect(data.status).toBe('error');
+    });
+
+    test('no debe permitir modificar ni eliminar guías de otra oficina (Aislamiento IDOR)', async () => {
+      // Guardar guía perteneciente a OTRA oficina distinta a la del token ('oficina-http-test')
+      await GuidesModel.save({
+        id: 'guide-oficina-ajena',
+        code: 'AJENA-01',
+        owner: 'CLIENTE AJENO',
+        delivered: false
+      }, 'oficina-completamente-distinta');
+
+      // Intentar modificar con el token de 'oficina-http-test'
+      const patchRes = await fetch(`${baseUrl}/api/guides/guide-oficina-ajena`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -255,11 +301,20 @@ describe('GuidesModel (Memory Fallback)', () => {
         },
         body: JSON.stringify({ delivered: true })
       });
+      expect(patchRes.status).toBe(404);
 
-      expect(response.status).toBe(404);
-      const data = await response.json();
-      expect(data.status).toBe('error');
-      expect(data.message).toBe('Guía no encontrada');
+      // Intentar eliminar con el token de 'oficina-http-test'
+      const deleteRes = await fetch(`${baseUrl}/api/guides/guide-oficina-ajena`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      expect(deleteRes.status).toBe(404);
+
+      // Verificar que la guía ajena sigue intacta en su oficina
+      const foreignGuides = await GuidesModel.getByOffice('oficina-completamente-distinta');
+      expect(foreignGuides.some(g => g.id === 'guide-oficina-ajena')).toBe(true);
     });
   });
 });

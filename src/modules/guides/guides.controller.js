@@ -11,7 +11,8 @@ import {
  */
 export async function getGuides(req, res, next) {
   try {
-    const officeId = req.query.office_id || req.user?.office_id || req.user?.id || 'default';
+    // Aislamiento seguro: siempre forzar la oficina del usuario autenticado
+    const officeId = req.user?.officeId || req.user?.office_id || req.user?.id || 'default';
     const since = req.query.since || null;
     
     const guides = await fetchGuidesByOffice(officeId, since);
@@ -37,7 +38,8 @@ export async function createOrUpdateGuide(req, res, next) {
       });
     }
 
-    const officeId = guide.office_id || guide.officeId || req.user?.officeId || req.user?.office_id || req.user?.id || 'default';
+    // Forzar oficina del token; ignorar spoofing de office_id en el body
+    const officeId = req.user?.officeId || req.user?.office_id || req.user?.id || 'default';
     const userId = req.user?.uid || req.user?.id || null;
 
     const savedGuide = await GuidesModel.save(guide, officeId, userId);
@@ -66,8 +68,13 @@ export async function updateGuide(req, res, next) {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const officeId = req.user?.officeId || req.user?.office_id;
 
-    const updatedGuide = await updateGuideService(id, updates);
+    // Prevenir alteración maliciosa de oficina
+    delete updates.office_id;
+    delete updates.officeId;
+
+    const updatedGuide = await updateGuideService(id, updates, officeId);
     if (!updatedGuide) {
       return res.status(404).json({
         status: 'error',
@@ -77,9 +84,9 @@ export async function updateGuide(req, res, next) {
 
     const io = req.app.get('io');
     if (io) {
-      const officeId = updatedGuide.office_id || req.user?.officeId || req.user?.office_id;
-      if (officeId && officeId !== 'default') {
-        io.to(officeId).emit('updateGuide', updatedGuide);
+      const targetOffice = updatedGuide.office_id || officeId;
+      if (targetOffice && targetOffice !== 'default') {
+        io.to(targetOffice).emit('updateGuide', updatedGuide);
       } else {
         io.emit('updateGuide', updatedGuide);
       }
@@ -97,12 +104,10 @@ export async function updateGuide(req, res, next) {
  */
 export async function resetGuides(req, res, next) {
   try {
-    const officeId = req.body?.office_id 
-      || req.body?.officeId 
-      || req.query?.office_id 
-      || req.query?.officeId 
-      || req.user?.officeId 
+    // Forzar la oficina del usuario autenticado para evitar purga cruzada
+    const officeId = req.user?.officeId 
       || req.user?.office_id 
+      || req.user?.id 
       || 'default';
 
     const result = await resetGuidesByOffice(officeId);
@@ -127,6 +132,43 @@ export async function resetGuides(req, res, next) {
     res.json({
       success: true,
       message: 'Gestión de guías reiniciada correctamente',
+      ...payload
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Elimina una guía individual.
+ * DELETE /api/guides/:id
+ */
+export async function deleteGuide(req, res, next) {
+  try {
+    const { id } = req.params;
+    const officeId = req.user?.officeId || req.user?.office_id || 'default';
+
+    const deleted = await GuidesModel.delete(id, officeId);
+    if (!deleted) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Guía no encontrada'
+      });
+    }
+
+    const payload = { id, officeId };
+    const io = req.app.get('io');
+    if (io) {
+      if (officeId && officeId !== 'all' && officeId !== 'default') {
+        io.to(officeId).emit('guideDeleted', payload);
+      } else {
+        io.emit('guideDeleted', payload);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Guía eliminada correctamente',
       ...payload
     });
   } catch (error) {
