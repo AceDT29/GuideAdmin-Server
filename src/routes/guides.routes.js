@@ -7,23 +7,28 @@ import {
   deleteGuide
 } from '../modules/guides/guides.controller.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import approvedOfficeMiddleware from '../middleware/approvedOfficeMiddleware.js';
 
 const router = express.Router();
 
+// Todas las operaciones con guías requieren autenticación Y que la oficina esté aprobada
+router.use(authMiddleware);
+router.use(approvedOfficeMiddleware);
+
 // GET /api/guides
-router.get('/', authMiddleware, getGuides);
+router.get('/', getGuides);
 
 // POST /api/guides
-router.post('/', authMiddleware, createOrUpdateGuide);
+router.post('/', createOrUpdateGuide);
 
 // PATCH /api/guides/:id (marcar entregado o actualizar detalles)
-router.patch('/:id', authMiddleware, updateGuide);
+router.patch('/:id', updateGuide);
 
 // DELETE /api/guides/:id (eliminar una guía individual)
-router.delete('/:id', authMiddleware, deleteGuide);
+router.delete('/:id', deleteGuide);
 
 // POST /api/guides/reset o DELETE /api/guides (reiniciar gestión de guías)
-router.post('/reset', authMiddleware, resetGuides);
-router.delete('/', authMiddleware, resetGuides);
+router.post('/reset', resetGuides);
+router.delete('/', resetGuides);
 
 export default router;
