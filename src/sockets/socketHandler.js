@@ -13,16 +13,25 @@ export function registerSocketEvents(io) {
     if (socket.officeId) {
       socket.join(socket.officeId);
 
-      try {
-        const guides = await fetchGuidesByOffice(socket.officeId);
-        console.log(`[Socket] Guías cargadas para oficina ${socket.officeId}:`, guides.length);
+      // Si la cuenta está en espera de aprobación, no emitir guías y notificar al socket
+      if (socket.user?.status === 'pending_approval') {
+        socket.emit("accountStatus", {
+          status: 'pending_approval',
+          message: 'Tu cuenta está en espera de aprobación por el administrador.'
+        });
+        console.log(`[Socket] Conexión de oficina pendiente de aprobación: ${socket.officeId}`);
+      } else {
+        try {
+          const guides = await fetchGuidesByOffice(socket.officeId);
+          console.log(`[Socket] Guías cargadas para oficina ${socket.officeId}:`, guides.length);
 
-        if (guides.length > 0) {
-          // Emitir solo al socket que se acaba de conectar, no a toda la sala
-          socket.emit("initialGuides", guides);
+          if (guides.length > 0) {
+            // Emitir solo al socket que se acaba de conectar, no a toda la sala
+            socket.emit("initialGuides", guides);
+          }
+        } catch (error) {
+          console.error(`[Socket] Error al cargar guías para oficina ${socket.officeId}:`, error);
         }
-      } catch (error) {
-        console.error(`[Socket] Error al cargar guías para oficina ${socket.officeId}:`, error);
       }
 
       console.log(`[Socket] Usuario ${socket.user?.uid || socket.id} (${socket.user?.email || 'N/A'}) se unió automáticamente a la sala de oficina: ${socket.officeId}`);
@@ -47,8 +56,23 @@ export function registerSocketEvents(io) {
       console.log(`[Socket] Usuario desconectado: ${socket.id} (Oficina: ${socket.officeId})`);
     });
 
+    const isBlockedAccount = (sock) => {
+      return sock.user?.status === 'pending_approval' || sock.user?.status === 'suspended';
+    };
+
     socket.on("createGuide", async (guide, callback) => {
       try {
+        if (isBlockedAccount(socket)) {
+          const isPending = socket.user?.status === 'pending_approval';
+          const errCode = isPending ? 'ACCOUNT_PENDING_APPROVAL' : 'ACCOUNT_SUSPENDED';
+          const errMsg = isPending
+            ? 'Tu cuenta está en espera de aprobación por el administrador.'
+            : 'Tu cuenta de oficina ha sido suspendida.';
+          if (typeof callback === 'function') callback({ error: errCode, message: errMsg });
+          socket.emit('error', { code: errCode, message: errMsg });
+          return;
+        }
+
         console.log("Nueva guía recibida:", guide);
         // La oficina SIEMPRE proviene del socket autenticado
         const officeId = socket.officeId || "default";
@@ -79,6 +103,11 @@ export function registerSocketEvents(io) {
     // Manejador del evento updateGuide (checkbox entregado o edición de dueño)
     socket.on("updateGuide", async ({ id, ...updates }, callback) => {
       try {
+        if (isBlockedAccount(socket)) {
+          if (typeof callback === 'function') callback({ error: 'ACCOUNT_NOT_AUTHORIZED' });
+          return;
+        }
+
         console.log(`[Socket] Actualizando guía ${id}:`, updates);
         const officeId = socket.officeId || "default";
         delete updates.office_id;
@@ -106,6 +135,11 @@ export function registerSocketEvents(io) {
     // Manejador del evento deleteGuide (eliminación individual de una guía)
     socket.on("deleteGuide", async ({ id }, callback) => {
       try {
+        if (isBlockedAccount(socket)) {
+          if (typeof callback === 'function') callback({ error: 'ACCOUNT_NOT_AUTHORIZED' });
+          return;
+        }
+
         console.log(`[Socket] Eliminando guía ${id}`);
         const officeId = socket.officeId || "default";
         const deleted = await GuidesModel.delete(id, officeId);
@@ -134,6 +168,11 @@ export function registerSocketEvents(io) {
     const handleResetGuides = async (data, callback) => {
       try {
         const cb = typeof data === 'function' ? data : callback;
+        if (isBlockedAccount(socket)) {
+          if (typeof cb === 'function') cb({ error: 'ACCOUNT_NOT_AUTHORIZED' });
+          return;
+        }
+
         // La oficina SIEMPRE proviene del socket autenticado
         const officeId = socket.officeId || "default";
 

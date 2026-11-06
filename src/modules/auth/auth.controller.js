@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "../../lib/supabaseConfig.js";
 import jwt from 'jsonwebtoken';
 import { SessionService } from '../../services/session.service.js';
+import { sendOfficeRegistrationNotification } from '../../services/emailService.js';
+import { getUserRole, isUserAdmin, SUPERADMIN_EMAIL } from '../../lib/roles.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 
@@ -40,7 +42,11 @@ function createAccessToken(payload) {
 /**
  * Construye la respuesta estandarizada de usuario con sus tokens.
  */
-function buildAuthResponse({ userId, email, displayName, officeId, accessToken, refreshToken, message }) {
+function buildAuthResponse({ userId, email, displayName, officeId, accessToken, refreshToken, message, role, isAdmin, status }) {
+  const finalRole = role || (email && email.toLowerCase().trim() === SUPERADMIN_EMAIL ? 'superadmin' : 'operator');
+  const finalIsAdmin = typeof isAdmin === 'boolean' ? isAdmin : (finalRole === 'superadmin' || finalRole === 'admin');
+  const finalStatus = status || (email && email.toLowerCase().trim() === SUPERADMIN_EMAIL ? 'active' : 'trial');
+
   return {
     ok: true,
     message: message || 'Success',
@@ -49,11 +55,17 @@ function buildAuthResponse({ userId, email, displayName, officeId, accessToken, 
     refreshToken,
     uid: userId,
     officeId,
+    role: finalRole,
+    isAdmin: finalIsAdmin,
+    status: finalStatus,
     user: {
       uid: userId,
       email,
       displayName,
       officeId,
+      role: finalRole,
+      isAdmin: finalIsAdmin,
+      status: finalStatus,
     },
   };
 }
@@ -68,16 +80,24 @@ async function registerUser(req, res) {
     return res.status(400).json({ ok: false, message: 'MISSING_EMAIL_OR_PASSWORD' });
   }
 
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanDisplayName = String(displayName).trim();
+  const isRootSuperAdmin = cleanEmail === SUPERADMIN_EMAIL;
+  const initialStatus = isRootSuperAdmin ? 'active' : 'pending_approval';
+
   try {
     let createdUser = null;
 
     if (supabaseAdmin) {
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: cleanEmail,
         password,
         email_confirm: true,
         user_metadata: {
-          display_name: displayName,
+          display_name: cleanDisplayName,
+          subscription_status: initialStatus,
+          status: initialStatus,
+          role: isRootSuperAdmin ? 'superadmin' : 'operator',
         },
       });
 
@@ -93,20 +113,31 @@ async function registerUser(req, res) {
       // Modo fallback sin Supabase (tests y desarrollo aislado)
       createdUser = {
         id: `user-${Date.now()}`,
-        email,
-        user_metadata: { display_name: displayName },
+        email: cleanEmail,
+        user_metadata: {
+          display_name: cleanDisplayName,
+          subscription_status: initialStatus,
+          status: initialStatus,
+          role: isRootSuperAdmin ? 'superadmin' : 'operator',
+        },
       };
     }
 
     const userId = createdUser.id;
     const officeId = createdUser.user_metadata?.office_id || userId;
     const name = createdUser.user_metadata?.display_name || displayName;
+    const role = getUserRole(createdUser);
+    const isAdmin = isUserAdmin(createdUser);
+    const status = initialStatus;
 
     const accessToken = createAccessToken({
       uid: userId,
       email: createdUser.email,
       displayName: name,
       officeId,
+      role,
+      isAdmin,
+      status,
     });
 
     const session = await SessionService.createSession({
@@ -114,6 +145,19 @@ async function registerUser(req, res) {
       rememberMe: Boolean(rememberMe),
       deviceInfo: getDeviceInfo(req, deviceInfo),
       ipAddress: getClientIp(req),
+    });
+
+    // Notificar al administrador en segundo plano (no bloquea el registro del usuario)
+    sendOfficeRegistrationNotification({
+      displayName: name,
+      email: createdUser.email,
+      officeId,
+      userId,
+      deviceInfo: getDeviceInfo(req, deviceInfo),
+      ipAddress: getClientIp(req),
+      createdAt: new Date(),
+    }).catch((emailErr) => {
+      console.warn('[Auth Controller] Error en notificación por correo de nueva oficina:', emailErr.message);
     });
 
     return res.status(201).json(
@@ -125,6 +169,9 @@ async function registerUser(req, res) {
         accessToken,
         refreshToken: session.refreshToken,
         message: 'User registered successfully',
+        role,
+        isAdmin,
+        status,
       })
     );
   } catch (err) {
@@ -140,6 +187,13 @@ async function returnUser(req, res) {
   try {
     if (!req.user) return res.status(404).json({ ok: false, message: 'USER_NOT_FOUND' });
     const user = req.user;
+    const isRootSuperAdmin = (user.email || '').toLowerCase().trim() === SUPERADMIN_EMAIL;
+    const role = getUserRole(user);
+    const isAdmin = isUserAdmin(user);
+    const status = isRootSuperAdmin
+      ? 'active'
+      : (user.user_metadata?.subscription_status || user.user_metadata?.status || user.status || 'trial');
+
     return res.status(200).json({
       ok: true,
       user: {
@@ -147,6 +201,9 @@ async function returnUser(req, res) {
         email: user.email,
         displayName: user.user_metadata?.display_name || req.tokenPayload?.displayName || null,
         officeId: user.office_id || user.officeId || user.user_metadata?.office_id || user.id || user.uid,
+        role,
+        isAdmin,
+        status,
       },
     });
   } catch (err) {
@@ -191,12 +248,21 @@ async function loginUser(req, res) {
     const userId = authUser.id;
     const officeId = authUser.user_metadata?.office_id || userId;
     const name = authUser.user_metadata?.display_name || null;
+    const role = getUserRole(authUser);
+    const isAdmin = isUserAdmin(authUser);
+    const isRootSuperAdmin = (authUser.email || '').toLowerCase().trim() === SUPERADMIN_EMAIL;
+    const status = isRootSuperAdmin
+      ? 'active'
+      : (authUser.user_metadata?.subscription_status || authUser.user_metadata?.status || 'trial');
 
     const accessToken = createAccessToken({
       uid: userId,
       email: authUser.email,
       displayName: name,
       officeId,
+      role,
+      isAdmin,
+      status,
     });
 
     const session = await SessionService.createSession({
@@ -215,6 +281,9 @@ async function loginUser(req, res) {
         accessToken,
         refreshToken: session.refreshToken,
         message: 'User logged in successfully',
+        role,
+        isAdmin,
+        status,
       })
     );
   } catch (err) {
@@ -258,6 +327,7 @@ async function refreshTokenHandler(req, res) {
             email: data.user.email,
             displayName: data.user.user_metadata?.display_name || null,
             office_id: data.user.user_metadata?.office_id || data.user.id,
+            user_metadata: data.user.user_metadata,
           };
         }
       } catch (supaErr) {
@@ -265,11 +335,21 @@ async function refreshTokenHandler(req, res) {
       }
     }
 
+    const role = getUserRole(userDetails);
+    const isAdmin = isUserAdmin(userDetails);
+    const isRootSuperAdmin = (userDetails.email || '').toLowerCase().trim() === SUPERADMIN_EMAIL;
+    const status = isRootSuperAdmin
+      ? 'active'
+      : (userDetails.user_metadata?.subscription_status || userDetails.user_metadata?.status || 'trial');
+
     const newAccessToken = createAccessToken({
       uid: userDetails.id,
       email: userDetails.email,
       displayName: userDetails.displayName,
       officeId: userDetails.office_id,
+      role,
+      isAdmin,
+      status,
     });
 
     return res.status(200).json(
@@ -281,6 +361,9 @@ async function refreshTokenHandler(req, res) {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
         message: 'Token refreshed successfully',
+        role,
+        isAdmin,
+        status,
       })
     );
   } catch (err) {

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { initSocketServer } from './src/sockets/socketHandler.js';
 import authRoutes from './src/modules/auth/auth.routes.js';
 import guidesRoutes from './src/routes/guides.routes.js';
+import adminRoutes from './src/modules/admin/admin.routes.js';
 import { initCronJobs } from './src/services/cronService.js';
 
 const PORT = process.env.PORT || 5000;
@@ -16,7 +17,7 @@ const PORT = process.env.PORT || 5000;
 export const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://tradeexpressguides.netlify.app',
-  (process.env.FRONTEND_URL || '').trim(),
+  (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, ''),
 ].filter(origin => origin.length > 0);
 
 /**
@@ -47,6 +48,7 @@ export function createApp() {
   // Rutas de la API
   app.use('/api/auth', authRoutes);
   app.use('/api/guides', guidesRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // Manejo de rutas no encontradas (404)
   app.use((req, res) => {

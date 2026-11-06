@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '../lib/supabaseConfig.js';
+import { getUserRole, isUserAdmin } from '../lib/roles.js';
 
 export default async function authMiddleware(req, res, next) {
     try {
@@ -36,6 +37,11 @@ export default async function authMiddleware(req, res, next) {
         const effectiveOfficeId = decoded.officeId || user.user_metadata?.office_id || user.id;
         user.office_id = effectiveOfficeId;
         user.officeId = effectiveOfficeId;
+        user.role = getUserRole(user);
+        user.isAdmin = isUserAdmin(user);
+        user.status = user.isAdmin
+          ? 'active'
+          : (user.user_metadata?.subscription_status || user.user_metadata?.status || decoded.status || 'trial');
 
         req.user = user;
         req.tokenPayload = decoded;
