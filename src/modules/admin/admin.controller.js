@@ -12,6 +12,7 @@ const inMemoryOffices = [
     last_sign_in_at: new Date().toISOString(),
     user_metadata: {
       display_name: 'José Ángel Garcés (Super Admin)',
+      location: 'Sede Principal (Falcón, VE)',
       role: 'superadmin',
       subscription_status: 'active',
       office_id: 'superadmin-root-id',
@@ -181,6 +182,7 @@ export async function getOffices(req, res) {
         id: u.id,
         email: u.email,
         displayName: u.user_metadata?.display_name || u.email?.split('@')[0] || 'Oficina Zoom',
+        location: u.user_metadata?.location || null,
         officeId,
         role: computedRole,
         isSuperAdmin,

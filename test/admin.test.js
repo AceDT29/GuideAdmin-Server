@@ -132,6 +132,7 @@ describe('Admin Panel API & Role Management Tests', () => {
       expect(superAdminEntry).toBeDefined();
       expect(superAdminEntry.email).toBe(SUPERADMIN_EMAIL);
       expect(superAdminEntry.role).toBe('superadmin');
+      expect(superAdminEntry.location).toBe('Sede Principal (Falcón, VE)');
     });
 
     test('Guards Super Admin against role modification', async () => {
