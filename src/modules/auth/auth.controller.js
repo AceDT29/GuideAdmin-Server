@@ -47,7 +47,7 @@ function createAccessToken(payload) {
 /**
  * Construye la respuesta estandarizada de usuario con sus tokens.
  */
-function buildAuthResponse({ userId, email, displayName, officeId, accessToken, refreshToken, message, role, isAdmin, status }) {
+function buildAuthResponse({ userId, email, displayName, location, officeId, accessToken, refreshToken, message, role, isAdmin, status }) {
   const finalRole = role || (email && email.toLowerCase().trim() === SUPERADMIN_EMAIL ? 'superadmin' : 'operator');
   const finalIsAdmin = typeof isAdmin === 'boolean' ? isAdmin : (finalRole === 'superadmin' || finalRole === 'admin');
   const finalStatus = status || (email && email.toLowerCase().trim() === SUPERADMIN_EMAIL ? 'active' : 'trial');
@@ -67,6 +67,7 @@ function buildAuthResponse({ userId, email, displayName, officeId, accessToken, 
       uid: userId,
       email,
       displayName,
+      location: location || null,
       officeId,
       role: finalRole,
       isAdmin: finalIsAdmin,
@@ -79,7 +80,7 @@ function buildAuthResponse({ userId, email, displayName, officeId, accessToken, 
  * Registro de nuevo usuario.
  */
 async function registerUser(req, res) {
-  const { email, password, displayName, rememberMe, deviceInfo } = req.body;
+  const { email, password, displayName, location, address, officeLocation, rememberMe, deviceInfo } = req.body;
 
   if (!email || !password || !displayName) {
     return res.status(400).json({ ok: false, message: 'MISSING_EMAIL_OR_PASSWORD' });
@@ -87,6 +88,7 @@ async function registerUser(req, res) {
 
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanDisplayName = String(displayName).trim();
+  const cleanLocation = String(location || address || officeLocation || '').trim();
   const isRootSuperAdmin = cleanEmail === SUPERADMIN_EMAIL;
   const initialStatus = isRootSuperAdmin ? 'active' : 'pending_approval';
 
@@ -100,6 +102,7 @@ async function registerUser(req, res) {
         email_confirm: true,
         user_metadata: {
           display_name: cleanDisplayName,
+          location: cleanLocation,
           subscription_status: initialStatus,
           status: initialStatus,
           role: isRootSuperAdmin ? 'superadmin' : 'operator',
@@ -121,6 +124,7 @@ async function registerUser(req, res) {
         email: cleanEmail,
         user_metadata: {
           display_name: cleanDisplayName,
+          location: cleanLocation,
           subscription_status: initialStatus,
           status: initialStatus,
           role: isRootSuperAdmin ? 'superadmin' : 'operator',
@@ -131,6 +135,7 @@ async function registerUser(req, res) {
     const userId = createdUser.id;
     const officeId = createdUser.user_metadata?.office_id || userId;
     const name = createdUser.user_metadata?.display_name || displayName;
+    const userLocation = createdUser.user_metadata?.location || cleanLocation || null;
     const role = getUserRole(createdUser);
     const isAdmin = isUserAdmin(createdUser);
     const status = initialStatus;
@@ -139,6 +144,7 @@ async function registerUser(req, res) {
       uid: userId,
       email: createdUser.email,
       displayName: name,
+      location: userLocation,
       officeId,
       role,
       isAdmin,
@@ -157,6 +163,7 @@ async function registerUser(req, res) {
       displayName: name,
       email: createdUser.email,
       officeId,
+      location: userLocation,
       userId,
       deviceInfo: getDeviceInfo(req, deviceInfo),
       ipAddress: getClientIp(req),
@@ -170,6 +177,7 @@ async function registerUser(req, res) {
         userId,
         email: createdUser.email,
         displayName: name,
+        location: userLocation,
         officeId,
         accessToken,
         refreshToken: session.refreshToken,
@@ -205,6 +213,7 @@ async function returnUser(req, res) {
         uid: user.id || user.uid,
         email: user.email,
         displayName: user.user_metadata?.display_name || req.tokenPayload?.displayName || null,
+        location: user.user_metadata?.location || req.tokenPayload?.location || null,
         officeId: user.office_id || user.officeId || user.user_metadata?.office_id || user.id || user.uid,
         role,
         isAdmin,
@@ -253,6 +262,7 @@ async function loginUser(req, res) {
     const userId = authUser.id;
     const officeId = authUser.user_metadata?.office_id || userId;
     const name = authUser.user_metadata?.display_name || null;
+    const userLocation = authUser.user_metadata?.location || null;
     const role = getUserRole(authUser);
     const isAdmin = isUserAdmin(authUser);
     const isRootSuperAdmin = (authUser.email || '').toLowerCase().trim() === SUPERADMIN_EMAIL;
@@ -264,6 +274,7 @@ async function loginUser(req, res) {
       uid: userId,
       email: authUser.email,
       displayName: name,
+      location: userLocation,
       officeId,
       role,
       isAdmin,
@@ -282,6 +293,7 @@ async function loginUser(req, res) {
         userId,
         email: authUser.email,
         displayName: name,
+        location: userLocation,
         officeId,
         accessToken,
         refreshToken: session.refreshToken,
@@ -320,6 +332,7 @@ async function refreshTokenHandler(req, res) {
       id: session.user_id,
       email: null,
       displayName: null,
+      location: null,
       office_id: session.user_id,
     };
 
@@ -331,6 +344,7 @@ async function refreshTokenHandler(req, res) {
             id: data.user.id,
             email: data.user.email,
             displayName: data.user.user_metadata?.display_name || null,
+            location: data.user.user_metadata?.location || null,
             office_id: data.user.user_metadata?.office_id || data.user.id,
             user_metadata: data.user.user_metadata,
           };
@@ -351,6 +365,7 @@ async function refreshTokenHandler(req, res) {
       uid: userDetails.id,
       email: userDetails.email,
       displayName: userDetails.displayName,
+      location: userDetails.location,
       officeId: userDetails.office_id,
       role,
       isAdmin,
@@ -362,6 +377,7 @@ async function refreshTokenHandler(req, res) {
         userId: userDetails.id,
         email: userDetails.email,
         displayName: userDetails.displayName,
+        location: userDetails.location,
         officeId: userDetails.office_id,
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,

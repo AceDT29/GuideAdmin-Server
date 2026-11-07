@@ -49,6 +49,7 @@ function getTransporter() {
  * @param {string} params.displayName - Nombre de la oficina u operador.
  * @param {string} params.email - Correo de la oficina registrada.
  * @param {string} params.officeId - Identificador de la oficina.
+ * @param {string} [params.location] - Ubicación o dirección física de la oficina.
  * @param {string} [params.userId] - ID de usuario en Supabase/BD.
  * @param {string} [params.deviceInfo] - Información del dispositivo o navegador.
  * @param {string} [params.ipAddress] - Dirección IP de origen.
@@ -59,6 +60,7 @@ export async function sendOfficeRegistrationNotification({
   displayName,
   email,
   officeId,
+  location,
   userId,
   deviceInfo = 'No especificado',
   ipAddress = 'No especificada',
@@ -137,6 +139,11 @@ export async function sendOfficeRegistrationNotification({
               <td class="label">🏢 Oficina / Operador:</td>
               <td class="value"><strong>${displayName}</strong></td>
             </tr>
+            ${location ? `
+            <tr>
+              <td class="label">📍 Ubicación / Dirección:</td>
+              <td class="value"><strong>${location}</strong></td>
+            </tr>` : ''}
             <tr>
               <td class="label">✉️ Correo Electrónico:</td>
               <td class="value"><a href="mailto:${email}" style="color: #0284c7; text-decoration: none;">${email}</a></td>
@@ -191,6 +198,7 @@ export async function sendOfficeRegistrationNotification({
       },
       text: `Nueva oficina registrada en Guides Admin:\n\n` +
             `Oficina: ${displayName}\n` +
+            (location ? `Ubicación: ${location}\n` : '') +
             `Correo: ${email}\n` +
             `ID Oficina: ${officeId}\n` +
             `Fecha: ${registrationDate}\n` +
