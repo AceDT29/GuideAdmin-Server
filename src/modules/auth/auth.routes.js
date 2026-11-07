@@ -5,6 +5,10 @@ import {
   refreshTokenHandler,
   logoutUser,
   logoutAllDevices,
+  forgotPassword,
+  verifyResetCode,
+  verifyResetToken,
+  resetPassword,
 } from './auth.controller.js';
 import authMiddleware from '../../middleware/authMiddleware.js';
 import express from 'express';
@@ -41,5 +45,11 @@ router.post('/logout', logoutUser);
 
 // Cierre de sesión global (todos los dispositivos de la cuenta/oficina)
 router.post('/logout-all', authMiddleware, logoutAllDevices);
+
+// Recuperación y restablecimiento de contraseña
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/verify-reset-code', authLimiter, verifyResetCode);
+router.get('/verify-reset-token', authLimiter, verifyResetToken);
+router.post('/reset-password', authLimiter, resetPassword);
 
 export default router;
