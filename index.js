@@ -16,7 +16,8 @@ const PORT = process.env.PORT || 5000;
 export const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://tradeexpressguides.netlify.app',
-  (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, ''),
+  "https://guidesadmin.netlify.app",
+  (process.env.FRONTEND_URL || process.env.FRONTEND_PROD_URL || '').trim().replace(/\/+$/, ''),
 ].filter(origin => origin.length > 0);
 
 /**
