@@ -51,6 +51,7 @@ function getTransporter() {
  * @param {string} params.officeId - Identificador de la oficina.
  * @param {string} [params.location] - Ubicación o dirección física de la oficina.
  * @param {string} [params.userId] - ID de usuario en Supabase/BD.
+ * @param {string} [params.approvalToken] - Token JWT firmado para aprobar la cuenta vía enlace directo.
  * @param {string} [params.deviceInfo] - Información del dispositivo o navegador.
  * @param {string} [params.ipAddress] - Dirección IP de origen.
  * @param {Date|string} [params.createdAt] - Fecha del registro.
@@ -62,6 +63,7 @@ export async function sendOfficeRegistrationNotification({
   officeId,
   location,
   userId,
+  approvalToken,
   deviceInfo = 'No especificado',
   ipAddress = 'No especificada',
   createdAt = new Date(),
@@ -96,6 +98,11 @@ export async function sendOfficeRegistrationNotification({
     dateStyle: 'full',
     timeStyle: 'medium',
   });
+
+  const serverBaseUrl = (process.env.BACKEND_URL || process.env.SERVER_URL || 'https://guidesadmin-server.onrender.com').trim().replace(/\/+$/, '');
+  const directApproveUrl = approvalToken
+    ? `${serverBaseUrl}/api/admin/approve-by-email?token=${encodeURIComponent(approvalToken)}`
+    : null;
 
   const subject = `⏳ Nueva Oficina Registrada (En Espera de Aprobación): ${displayName} (${email})`;
 
@@ -171,10 +178,16 @@ export async function sendOfficeRegistrationNotification({
             </tr>
           </table>
 
-          <div style="text-align: center; margin: 24px 0 8px 0;">
-            <a href="https://tradeexpressguides.netlify.app/admin" class="btn">
-              👑 Ir al Panel Administrativo y Aprobar Cuenta
-            </a>
+          <div style="text-align: center; margin: 24px 0 8px 0; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+            ${directApproveUrl ? `
+            <a href="${directApproveUrl}" class="btn" style="background-color: #059669; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.35); margin-bottom: 8px;">
+              ⚡ Aprobar Directamente (Activar 5 Días de Prueba)
+            </a>` : ''}
+            <div>
+              <a href="https://tradeexpressguides.netlify.app/admin" style="font-size: 12px; color: #0284c7; text-decoration: none; font-weight: 600;">
+                👑 O abrir el Panel Administrativo
+              </a>
+            </div>
           </div>
         </div>
         <div class="footer">
@@ -203,7 +216,9 @@ export async function sendOfficeRegistrationNotification({
             `ID Oficina: ${officeId}\n` +
             `Fecha: ${registrationDate}\n` +
             `Dispositivo: ${deviceInfo}\n` +
-            `IP: ${ipAddress}\n`,
+            `IP: ${ipAddress}\n\n` +
+            (directApproveUrl ? `Aprobar periodo de prueba (5 días) directamente:\n${directApproveUrl}\n\n` : '') +
+            `Panel Admin: https://tradeexpressguides.netlify.app/admin\n`,
       html: htmlContent,
     });
 
