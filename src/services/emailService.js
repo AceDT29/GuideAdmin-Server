@@ -99,7 +99,7 @@ export async function sendOfficeRegistrationNotification({
     timeStyle: 'medium',
   });
 
-  const serverBaseUrl = (process.env.BACKEND_URL || process.env.SERVER_URL || 'https://guidesadmin-server.onrender.com').trim().replace(/\/+$/, '');
+  const serverBaseUrl = (process.env.BACKEND_URL || process.env.SERVER_URL || 'https://guideadmin-server.onrender.com').trim().replace(/\/+$/, '');
   const directApproveUrl = approvalToken
     ? `${serverBaseUrl}/api/admin/approve-by-email?token=${encodeURIComponent(approvalToken)}`
     : null;
