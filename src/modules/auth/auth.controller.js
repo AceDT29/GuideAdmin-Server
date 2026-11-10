@@ -7,6 +7,7 @@ import {
   sendPasswordResetEmail,
   sendPasswordResetCodeEmail,
 } from '../../services/emailService.js';
+import { generateApprovalToken, inMemoryOffices } from '../admin/admin.controller.js';
 import { getUserRole, isUserAdmin, SUPERADMIN_EMAIL } from '../../lib/roles.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
@@ -122,6 +123,7 @@ async function registerUser(req, res) {
       createdUser = {
         id: `user-${Date.now()}`,
         email: cleanEmail,
+        created_at: new Date().toISOString(),
         user_metadata: {
           display_name: cleanDisplayName,
           location: cleanLocation,
@@ -130,6 +132,7 @@ async function registerUser(req, res) {
           role: isRootSuperAdmin ? 'superadmin' : 'operator',
         },
       };
+      inMemoryOffices.push(createdUser);
     }
 
     const userId = createdUser.id;
@@ -158,6 +161,14 @@ async function registerUser(req, res) {
       ipAddress: getClientIp(req),
     });
 
+    // Generar token firmado de aprobación rápida para el correo
+    let approvalToken = null;
+    try {
+      approvalToken = generateApprovalToken(userId, name);
+    } catch (tokErr) {
+      console.warn('[Auth Controller] Error al generar token de aprobación por correo:', tokErr.message);
+    }
+
     // Notificar al administrador en segundo plano (no bloquea el registro del usuario)
     sendOfficeRegistrationNotification({
       displayName: name,
@@ -165,6 +176,7 @@ async function registerUser(req, res) {
       officeId,
       location: userLocation,
       userId,
+      approvalToken,
       deviceInfo: getDeviceInfo(req, deviceInfo),
       ipAddress: getClientIp(req),
       createdAt: new Date(),

@@ -10,6 +10,7 @@ jest.unstable_mockModule('../src/lib/supabaseConfig.js', () => ({
 
 const { createApp } = await import('../index.js');
 const { SUPERADMIN_EMAIL, getUserRole, isUserAdmin } = await import('../src/lib/roles.js');
+const { generateApprovalToken } = await import('../src/modules/admin/admin.controller.js');
 
 describe('Admin Panel API & Role Management Tests', () => {
   let app;
@@ -174,6 +175,79 @@ describe('Admin Panel API & Role Management Tests', () => {
       const data = await res.json();
       expect(data.ok).toBe(true);
       expect(data.office.trialDaysExtended).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Direct Email Approval Flow (GET /api/admin/approve-by-email)', () => {
+    test('Rejects request without token (400)', async () => {
+      const res = await fetch(`${baseUrl}/api/admin/approve-by-email`);
+      expect(res.status).toBe(400);
+      const html = await res.text();
+      expect(html).toContain('Enlace Inválido');
+    });
+
+    test('Rejects invalid or tampered token (403)', async () => {
+      const res = await fetch(`${baseUrl}/api/admin/approve-by-email?token=invalid-token-12345`);
+      expect(res.status).toBe(403);
+      const html = await res.text();
+      expect(html).toContain('Enlace Inválido');
+    });
+
+    test('Rejects token with invalid purpose (403)', async () => {
+      const wrongPurposeToken = jwt.sign(
+        { userId: 'superadmin-root-id', purpose: 'wrong_purpose' },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      const res = await fetch(`${baseUrl}/api/admin/approve-by-email?token=${wrongPurposeToken}`);
+      expect(res.status).toBe(403);
+      const html = await res.text();
+      expect(html).toContain('Token No Autorizado');
+    });
+
+    test('Rejects expired approval token (403)', async () => {
+      const expiredToken = jwt.sign(
+        { userId: 'superadmin-root-id', purpose: 'email_office_approval' },
+        process.env.JWT_SECRET,
+        { expiresIn: -10 }
+      );
+      const res = await fetch(`${baseUrl}/api/admin/approve-by-email?token=${expiredToken}`);
+      expect(res.status).toBe(403);
+      const html = await res.text();
+      expect(html).toContain('Enlace Expirado');
+    });
+
+    test('Approves pending office and starts 5-day trial, and is idempotent on repeat (200)', async () => {
+      // Registrar primero una oficina en memoria simulando el flujo de registro
+      const regRes = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'nueva-oficina-correo@zoom.com',
+          password: 'Password123!',
+          displayName: 'Oficina Correo Test',
+          location: 'Coro, Falcón',
+        }),
+      });
+      expect(regRes.status).toBe(201);
+      const regData = await regRes.json();
+      const officeUserId = regData.uid;
+
+      // Generar token legítimo de aprobación por correo
+      const approvalToken = generateApprovalToken(officeUserId, 'Oficina Correo Test');
+
+      // Primer clic en el enlace desde el correo -> Aprobación exitosa
+      const approveRes = await fetch(`${baseUrl}/api/admin/approve-by-email?token=${encodeURIComponent(approvalToken)}`);
+      expect(approveRes.status).toBe(200);
+      const approveHtml = await approveRes.text();
+      expect(approveHtml).toContain('Oficina Aprobada');
+      expect(approveHtml).toContain('5 días');
+
+      // Segundo clic en el enlace (idempotencia) -> Avisa que ya fue procesada
+      const repeatRes = await fetch(`${baseUrl}/api/admin/approve-by-email?token=${encodeURIComponent(approvalToken)}`);
+      expect(repeatRes.status).toBe(200);
+      const repeatHtml = await repeatRes.text();
+      expect(repeatHtml).toContain('Ya Procesada');
     });
   });
 });
